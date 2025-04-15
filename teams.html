@@ -1,0 +1,74 @@
+<!-- teams.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose Your Teams</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Create Your Teams</h1>
+        <div class="team" id="team1">
+            <h2>Team 1</h2>
+            <input type="text" id="team1-input" placeholder="Enter Player Name" />
+            <button onclick="addPlayer('team1')">Add Player</button>
+            <ul id="team1-list"></ul>
+        </div>
+        <div class="team" id="team2">
+            <h2>Team 2</h2>
+            <input type="text" id="team2-input" placeholder="Enter Player Name" />
+            <button onclick="addPlayer('team2')">Add Player</button>
+            <ul id="team2-list"></ul>
+        </div>
+        <button id="start-game-btn" onclick="startGame()">Start Game</button>
+    </div>
+
+    <script>
+        // Function to add player names to team lists
+        let team1Players = [];
+        let team2Players = [];
+
+        function addPlayer(team) {
+            const input = document.getElementById(`${team}-input`);
+            const playerName = input.value.trim();
+
+            if (playerName) {
+                if (team === 'team1') {
+                    team1Players.push(playerName);
+                    updateTeamList('team1', team1Players);
+                } else {
+                    team2Players.push(playerName);
+                    updateTeamList('team2', team2Players);
+                }
+                input.value = ''; // Clear input field
+            }
+        }
+
+        function updateTeamList(team, players) {
+            const list = document.getElementById(`${team}-list`);
+            list.innerHTML = ''; // Clear list
+            players.forEach(player => {
+                const listItem = document.createElement('li');
+                listItem.textContent = player;
+                list.appendChild(listItem);
+            });
+        }
+
+        function startGame() {
+            if (team1Players.length >= 2 && team2Players.length >= 2) {
+                const team1Data = encodeURIComponent(JSON.stringify(team1Players));
+                const team2Data = encodeURIComponent(JSON.stringify(team2Players));
+
+                console.log("Encoded team data:", team1Data, team2Data);  // Check if data is being encoded properly
+
+                window.location.href = `game.html?team1=${team1Data}&team2=${team2Data}`; // Pass as query parameters
+            } else {
+                alert('Please add at least 2 players to each team.');
+            }
+        }
+
+    </script>
+</body>
+</html>

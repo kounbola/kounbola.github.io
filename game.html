@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Koun Bola?</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Koun Bola?</h1>
+
+        <!-- Display Current Player and Team -->
+        <div id="player-info">
+            <h2 id="current-player">Current Player: <span id="player-name">Waiting for Player...</span></h2>
+            <h3 id="current-team">Team: <span id="team-name">?</span></h3>
+        </div>
+
+        <!-- Display Scores -->
+        <div id="scores">
+            <h3>Team 1 Score: <span id="team1-score">0</span></h3>
+            <h3>Team 2 Score: <span id="team2-score">0</span></h3>
+        </div>
+
+        <!-- Timer Section -->
+        <div id="timer" class="digital-clock">00:00</div>
+
+        <!-- Start Game Button -->
+        <button id="start-btn" onclick="startGame()">Start Game</button>
+
+        <!-- Next Category Button -->
+        <button id="next-category-btn" onclick="nextCategory()" style="display:none;">Next Category</button>
+
+        <!-- Next Player Button -->
+        <button id="next-player-btn" onclick="nextPlayer()" style="display:none;">Next Player</button>
+
+        <!-- Winner Section (hidden initially) -->
+        <div id="winner-screen" style="display:none;">
+            <h2 id="winning-team"></h2>
+            <p id="team-players"></p>
+            <button onclick="restartGame()">Restart</button>
+        </div>
+
+        <!-- Question Categories (Initially hidden) -->
+        <div id="question" style="display: none;">
+            <div class="category" id="category-1" data-points="1">
+                <h3>Movie</h3>
+                <p id="movie-name">Movie: ?</p>
+            </div>
+            <div class="category" id="category-2" data-points="2">
+                <h3>Actor</h3>
+                <p id="actor-name">Actor: ?</p>
+            </div>
+            <div class="category" id="category-3" data-points="3">
+                <h3>Character</h3>
+                <p id="character-name">Character: ?</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get teams from URL parameters (this should be passed from teams page)
+        function getQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                team1: JSON.parse(decodeURIComponent(params.get('team1'))),
+                team2: JSON.parse(decodeURIComponent(params.get('team2')))
+            };
+        }
+
+        const { team1, team2 } = getQueryParams();
+        let currentPlayer = '';
+        let currentTeam = '';
+        let gameTimer = 60;
+        let timerInterval;
+        let pointsEarned = 0;
+        let team1Score = 0;
+        let team2Score = 0;
+        let categories = []; // To store categories from CSV
+        let usedRows = []; // Array to keep track of used rows
+        let currentCategory = {}; // Store the current category being shown
+
+        // Check if the team data exists
+        if (!team1 || !team2 || team1.length < 2 || team2.length < 2) {
+            alert("Both teams must have at least 2 players. Please go back and add players.");
+            window.location.href = 'teams.html'; // Redirect to the teams page if data is missing
+        }
+
+        let team1UsedPlayers = [];  // Keep track of used players for Team 1
+        let team2UsedPlayers = [];  // Keep track of used players for Team 2
+        let currentTurnTeam = Math.random() < 0.5 ? 0 : 1;  // Randomly decide the first team (0 for Team 1, 1 for Team 2)
+
+        // Store the next player and team
+        let nextPlayerDetails = { player: "", team: "" };
+
+        // Function to pick a player and assign a team (when Next Player button is clicked)
+        function pickNextPlayer() {
+            const teams = [team1, team2];
+            const usedPlayers = [team1UsedPlayers, team2UsedPlayers];
+            
+            // Set the current team based on the random selection or alternating turns
+            currentTeam = currentTurnTeam === 0 ? 'Team 1' : 'Team 2';
+            let availablePlayers = teams[currentTurnTeam].filter(player => !usedPlayers[currentTurnTeam].includes(player)); // Get players who haven't been used
+
+            if (availablePlayers.length === 0) {
+                // If all players from the current team have been selected, reset the used players and start over
+                usedPlayers[currentTurnTeam] = [];
+                availablePlayers = teams[currentTurnTeam]; // Re-assign all players to available players
+            }
+
+            // Pick a random player from the available ones
+            const randomPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
+
+            // Mark the player as used
+            usedPlayers[currentTurnTeam].push(randomPlayer);
+
+            // Store the next player and team details
+            nextPlayerDetails.player = randomPlayer;
+            nextPlayerDetails.team = currentTeam;
+
+            // Display the current player's name and team name
+            document.getElementById('player-name').textContent = nextPlayerDetails.player;
+            document.getElementById('team-name').textContent = nextPlayerDetails.team;
+
+            // Show the Start button again
+            document.getElementById('start-btn').style.display = 'inline-block';  // Show Start button
+
+            // Alternate the teams after each turn
+            currentTurnTeam = currentTurnTeam === 0 ? 1 : 0; // Switch between Team 1 and Team 2
+        }
+
+        // Function to fetch CSV and populate categories
+        function loadCategories() {
+            fetch('categories.csv')  // Adjust path if necessary
+                .then(response => response.text())
+                .then(data => {
+                    const lines = data.split('\n');
+                    lines.forEach(line => {
+                        const [movie, actor, character] = line.split(',');
+                        if (movie && actor && character) {
+                            categories.push({ movie, actor, character });
+                        }
+                    });
+                })
+                .catch(error => console.error('Error loading CSV:', error));
+        }
+
+        // Function to pick a random row from CSV and display it
+        function getRandomRow() {
+            if (categories.length === 0) {
+                alert("No categories available!");
+                return;
+            }
+
+            let randomIndex = Math.floor(Math.random() * categories.length);
+            let randomRow = categories[randomIndex];
+
+            // Make sure the row hasn't been used before
+            while (usedRows.includes(randomIndex)) {
+                randomIndex = Math.floor(Math.random() * categories.length);
+                randomRow = categories[randomIndex];
+            }
+
+            // Mark this row as used
+            usedRows.push(randomIndex);
+
+            // Store the current category for later use
+            currentCategory = randomRow;
+
+            // Display the data in the HTML
+            document.getElementById('movie-name').textContent = `Movie: ${randomRow.movie}`;
+            document.getElementById('actor-name').textContent = `Actor: ${randomRow.actor}`;
+            document.getElementById('character-name').textContent = `Character: ${randomRow.character}`;
+
+            // Disable the Next Category button
+            document.getElementById('next-category-btn').style.display = 'none';
+        }
+
+        // Disable all category divs
+        function disableCategoryDivs() {
+            const categoryDivs = document.querySelectorAll('.category');
+            categoryDivs.forEach(category => {
+                category.style.pointerEvents = 'none'; // Disable click events
+            });
+        }
+
+        // Re-enable all category divs
+        function enableCategoryDivs() {
+            const categoryDivs = document.querySelectorAll('.category');
+            categoryDivs.forEach(category => {
+                category.addEventListener('click', handleCategoryClick);
+                category.style.pointerEvents = 'auto'; // Enable click events
+                category.style.cursor = 'pointer';
+                category.style.backgroundColor = 'lightpink';  // Reset background color
+            });
+        }
+
+        // Function to start the game when Start button is clicked
+        function startGame() {
+            // Hide the Start button once clicked
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('question').style.display = 'block'; // Show categories
+
+            // Initialize the game timer and start the countdown
+            startTimer();
+
+            // Get the random row for the first round
+            getRandomRow();
+
+            enableCategoryDivs(); // Re-enable category divs
+        }
+
+        // Timer function (starts when Start button is clicked)
+        function startTimer() {
+            gameTimer = 60;  // Set the timer back to 60 seconds
+            document.getElementById('timer').textContent = '01:00'; // Show 01:00 as the starting timer
+
+            // Start the countdown
+            timerInterval = setInterval(function () {
+                if (gameTimer > 0) {
+                    gameTimer--;
+                    const minutes = Math.floor(gameTimer / 60);
+                    const seconds = gameTimer % 60;
+                    document.getElementById('timer').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                } else {
+                    clearInterval(timerInterval);
+                    disableCategoryDivs();  // Disable categories once timer ends
+                    document.getElementById('next-player-btn').style.display = 'inline-block';  // Show Next Player button
+                    document.getElementById('next-category-btn').style.display = 'none';  // Hide Next Category button
+                }
+            }, 1000);
+        }
+
+        // Handle category clicks
+        function handleCategoryClick(e) {
+            const category = e.target.closest('.category'); // Get the entire div
+            const points = parseInt(category.getAttribute('data-points'));
+
+
+            // Only award points if it hasn't been clicked already
+            if (category.style.backgroundColor === 'lightgreen') {
+                pointsEarned -= points;  // Deduct points if clicked again (mistakenly clicked)
+                // Update scores based on the points
+                if (currentTeam === 'Team 1') {
+                    team1Score -= points;
+                } else {
+                    team2Score -= points;
+                }
+                category.style.backgroundColor = 'lightpink';  // Reset background color
+            } else {
+                pointsEarned += points;  // Add points if first click
+                // Update scores based on the points
+                if (currentTeam === 'Team 1') {
+                    team1Score += points;
+                } else {
+                    team2Score += points;
+                }
+                category.style.backgroundColor = 'lightgreen';  // Set background to light green
+            }
+
+            console.log(`Points Earned: ${pointsEarned}`);
+
+
+
+            // Update and display the scores
+            document.getElementById('team1-score').textContent = team1Score;
+            document.getElementById('team2-score').textContent = team2Score;
+            // Enable the "Next Category" button
+            document.getElementById('next-category-btn').style.display = 'inline-block';
+        }
+
+        // Show next category after clicking Next Category button
+        function nextCategory() {
+            pointsEarned = 0;  // Reset points for the next category
+            getRandomRow();  // Pick and display a new random row
+            enableCategoryDivs(); // Re-enable category divs
+            document.getElementById('next-category-btn').style.display = 'none'; // Hide Next Category button
+        }
+
+        // Show next player and reset for the next round
+        function nextPlayer() {
+            // Check for winning team
+            if (team1Score >= 20) {
+                showWinner('Team 1');
+            } else if (team2Score >= 20) {
+                showWinner('Team 2');
+            } else {
+                pointsEarned = 0;  // Reset points for next round
+                gameTimer = 60;  // Reset timer
+                clearInterval(timerInterval);
+                document.getElementById('next-player-btn').style.display = 'none';  // Hide Next Player button
+                document.getElementById('next-category-btn').style.display = 'none';  // Hide Next Category button
+                pickNextPlayer();  // Pick the next player and display the details
+            }
+        }
+
+        // Display winner and show player details
+        function showWinner(winningTeam) {
+            document.getElementById('winner-screen').style.display = 'block';
+            document.getElementById('winning-team').textContent = `${winningTeam} Wins!`;
+            document.getElementById('team-players').textContent = `${winningTeam} players: ${winningTeam === 'Team 1' ? team1.join(', ') : team2.join(', ')}`;
+            disableCategoryDivs();  // Disable categories permanently
+            document.getElementById('next-player-btn').style.display = 'none';  // Hide Next Player button
+        }
+
+        // Restart the game by redirecting to the teams page
+        function restartGame() {
+            window.location.href = 'teams.html';
+        }
+
+        // Load categories from CSV when the page loads
+        loadCategories();
+        nextPlayer();
+        disableCategoryDivs(); 
+    </script>
+</body>
+</html>
